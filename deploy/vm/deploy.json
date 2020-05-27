@@ -1,0 +1,136 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "VmSettings": {
+            "type": "Object"
+        }
+    },
+    "variables": {
+        "name": "[parameters('VmSettings').name]",
+        "location": "[parameters('VmSettings').location]",
+        "size": "[parameters('VmSettings').size]",
+        "imagePublisher": "[parameters('VmSettings').imageReference.publisher]",
+        "imageOffer": "[parameters('VmSettings').imageReference.offer]",
+        "imageSku": "[parameters('VmSettings').imageReference.sku]",
+        "imageVersion": "[parameters('VmSettings').imageReference.version]",
+        "osDiskName": "[parameters('VmSettings').osDiskName]",
+        "computerName": "[parameters('VmSettings').computerName]",
+        "admin": "[parameters('VmSettings').admin]",
+        "password": "[parameters('VmSettings').password]",
+        "nicName": "[parameters('VmSettings').nic.name]",
+        "ipConfigName": "[parameters('VmSettings').nic.ipConfiguration.name]",
+        "ipConfigAllocationMethod": "[parameters('VmSettings').nic.ipConfiguration.privateIpAllocationMethod]",
+        "pipName": "[parameters('VmSettings').nic.pip.name]",
+        "ipConfigVnet": "[parameters('VmSettings').nic.ipConfiguration.vnet]",
+        "ipConfigSubnet": "[parameters('VmSettings').nic.ipConfiguration.subnet]",
+        "allocationMethod": "[parameters('VmSettings').nic.pip.allocationMethod]",
+        "pipVersion": "[parameters('VmSettings').nic.pip.version]"
+    },
+    "resources": [
+        {
+            "name": "[variables('pipName')]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2019-11-01",
+            "location": "[variables('location')]",
+            "properties": {
+                "publicIPAllocationMethod": "[variables('allocationMethod')]",
+                "publicIPAddressVersion": "[variables('pipVersion')]"
+            }
+        },
+        {
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2019-11-01",
+            "name": "[variables('nicName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[variables('pipName')]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[variables('ipConfigName')]",
+                        "properties": {
+                            "privateIPAllocationMethod": "[variables('ipConfigAllocationMethod')]",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('pipName'))]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('ipConfigVnet'), variables('ipConfigSubnet'))]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": []
+                },
+                "enableAcceleratedNetworking": false,
+                "enableIPForwarding": false
+            }
+        },
+        {
+            "type": "Microsoft.Compute/virtualMachines",
+            "apiVersion": "2019-07-01",
+            "name": "[variables('name')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[variables('pipName')]",
+                "[variables('nicName')]"
+            ],
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('size')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('imagePublisher')]",
+                        "offer": "[variables('imageOffer')]",
+                        "sku": "[variables('imageSku')]",
+                        "version": "[variables('imageVersion')]"
+                    },
+                    "osDisk": {
+                        "osType": "Linux",
+                        "name": "[variables('osDiskName')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "writeAcceleratorEnabled": false,
+                        "managedDisk": {
+                            "storageAccountType": "Standard_LRS"
+                        },
+                        "diskSizeGB": 30
+                    },
+                    "dataDisks": []
+                },
+                "osProfile": {
+                    "computerName": "[variables('computerName')]",
+                    "adminUsername": "[variables('admin')]",
+                    "adminPassword": "[variables('password')]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false,
+                        "provisionVMAgent": true
+                    },
+                    "secrets": [],
+                    "allowExtensionOperations": true
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]",
+                            "properties": {
+                                "primary": false
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "PublicIpAddress": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses',variables('pipName'))).ipAddress]"
+        }
+    }
+}

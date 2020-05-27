@@ -1,0 +1,38 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "ExtSettings": {
+            "type": "Object"
+        },
+        "CommandToRun": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "name": "[parameters('ExtSettings').name]",
+        "location": "[parameters('ExtSettings').location]",
+        "files": "[parameters('ExtSettings').files]",
+        "vmName": "[parameters('ExtSettings').vmName]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Compute/virtualMachines/extensions",
+            "apiVersion": "2019-03-01",
+            "name": "[concat(variables('vmName'),'/', variables('name'))]",
+            "location": "[variables('location')]",
+            "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                    "fileUris": "[variables('files')]"
+                },
+                "protectedSettings": {
+                    "commandToExecute": "[parameters('commandToRun')]"
+                }
+            }
+        }
+    ]
+}

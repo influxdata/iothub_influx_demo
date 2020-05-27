@@ -1,0 +1,123 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "FunctionAppSettings": {
+            "type": "object"
+        },
+        "StorageKey": {
+            "type": "securestring"
+        },
+        "InfluxHost": {
+            "type": "string",
+            "defaultValue": "0.0.0.0"
+        },
+        "IoTHubSBEndpoint": {
+            "type": "securestring"
+        }
+    },
+    "variables": {
+        "name": "[parameters('FunctionAppSettings').name]",
+        "location": "[parameters('FunctionAppSettings').location]",
+        "siteName": "[parameters('FunctionAppSettings').siteName]",
+        "influxtype": "[parameters('FunctionAppSettings').influxtype]",
+        "storageAccountName": "[parameters('FunctionAppSettings').storageAccountName]",
+        "StorageAccountKey": "[parameters('StorageKey')]",
+        "storageConn": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageAccountName'), ';AccountKey=', variables('StorageAccountKey'))]",
+        "hostingPlanName": "[concat(variables('name'), '-plan')]",
+        "functionJsonMain": "{\r\n  \"bindings\": [\r\n    {\r\n      \"type\": \"eventHubTrigger\",\r\n      \"name\": \"myIoTHubMessage\",\r\n      \"direction\": \"in\",\r\n      \"eventHubName\": \"samples-workitems\",\r\n      \"connection\": \"IOTHUB_CONN_STRING\",\r\n      \"consumerGroup\": \"$Default\"\r\n    }\r\n  ],\r\n  \"disabled\": ",
+        "functionJsonDisable": "[if(equals(variables('influxtype'), 'enterprise'), 'true', 'false' )]",
+        "functionJsonConcat": "[concat(variables('functionJsonMain'), variables('functionJsonDisable'), '\r\n}')]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Web/serverfarms",
+            "apiVersion": "2018-02-01",
+            "name": "[variables('hostingPlanName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Y1",
+                "tier": "Dynamic"
+            },
+            "properties": {
+                "name": "[variables('hostingPlanName')]",
+                "computeMode": "Dynamic"
+            }
+        },
+        {
+            "apiVersion": "2015-08-01",
+            "type": "Microsoft.Web/sites",
+            "name": "[variables('siteName')]",
+            "location": "[variables('location')]",
+            "kind": "functionapp",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+            ],
+            "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[variables('storageConn')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTAZUREFILECONNECTIONSTRING",
+                            "value": "[variables('storageConn')]"
+                        },
+                        {
+                            "name": "WEBSITE_CONTENTSHARE",
+                            "value": "functionapp"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~3"
+                        },
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "dotnet"
+                        },
+                        {
+                            "name": "INFLUX_HOST",
+                            "value": "[parameters('InfluxHost')]"
+                        },
+                        {
+                            "name": "IOTHUB_CONN_STRING",
+                            "value": "[parameters('IoTHubSBEndpoint')]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Web/sites/hostNameBindings",
+            "apiVersion": "2018-11-01",
+            "name": "[concat(variables('siteName'), '/', variables('siteName'), '.azurewebsites.net')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('siteName'))]"
+            ],
+            "properties": {
+                "siteName": "[variables('siteName')]",
+                "hostNameType": "Verified"
+            }
+        },
+        {	
+            "type": "Microsoft.Web/sites/functions",	
+            "apiVersion": "2018-11-01",	
+            "name": "[concat(variables('siteName'), '/', variables('name'))]",	
+            "location": "[variables('location')]",	
+            "dependsOn": [	
+                "[resourceId('Microsoft.Web/sites', variables('siteName'))]"	
+            ],	
+            "properties": {	
+                "config": {},
+                "files": {
+                    "run.csx": "#r \"Newtonsoft.Json\"\r\n\r\nusing System;\r\nusing System.Text;\r\nusing System.Net.Http;\r\nusing Newtonsoft.Json;\r\n\r\n\r\npublic static async Task Run(string myIoTHubMessage, ILogger log)\r\n{\r\n    var influxIp =  Environment.GetEnvironmentVariable(\"INFLUX_HOST\", EnvironmentVariableTarget.Process);\r\n    log.LogInformation($\"Using host: {influxIp}\");\r\n\r\n    MetricsList all = JsonConvert.DeserializeObject<MetricsList>(myIoTHubMessage);\r\n\r\n    using(var client = new HttpClient())\r\n    {\r\n        client.BaseAddress = new Uri($\"http:\/\/{influxIp}:8086\/\");\r\n        HttpContent c = new StringContent(all.ToString(), Encoding.UTF8, \"text\/plain\");  \r\n        log.LogInformation(all.ToString());          \r\n        var result = await client.PostAsync(\"write?db=opcdata&precision=s\",c);\r\n        string resultContent = await result.Content.ReadAsStringAsync();\r\n        log.LogInformation(resultContent);\r\n    }\r\n}\r\n\r\npublic class metric {\r\n    public Dictionary<string, object> fields;\r\n    public string name;\r\n    public Dictionary<string, string> tags;\r\n    public long timestamp;\r\n\r\n    public string ToString() {\r\n        string ts = \"\";\r\n        foreach(var item in tags){\r\n            var k = item.Key;\r\n            var v = item.Value;\r\n\r\n            if (!String.IsNullOrWhiteSpace(ts)) {\r\n                ts = string.Format(\"{0},\", ts);\r\n            }\r\n\r\n            ts = string.Format(\"{0}{1}={2}\", ts, k, v);\r\n        }\r\n\r\n        string fs = \"\";\r\n\r\n        foreach(var item in fields){\r\n            var k = item.Key;\r\n            var v = item.Value;\r\n\r\n            if (!String.IsNullOrWhiteSpace(fs)) {\r\n                fs = string.Format(\"{0},\", fs);\r\n            }\r\n\r\n            fs = string.Format(\"{0}{1}={2}\", fs, k, v);\r\n        }\r\n\r\n        string template = \"{0},{1} {2} {3}\";\r\n        string output = string.Format(template, name, ts, fs, timestamp);\r\n        return output;\r\n    }\r\n\r\n}\r\n\r\npublic class MetricsList {\r\n    public List<metric> metrics;\r\n\r\n    public string ToString() {\r\n            \r\n        string output = \"\";\r\n        \r\n        foreach (metric m in metrics) {\r\n            string toAdd = m.ToString();\r\n            output = string.Format(\"{0}\\n{1}\", output, toAdd);\r\n        }\r\n\r\n        return output;\r\n    }\r\n}\r\n\r\n",
+                    "function.json": "[variables('functionJsonConcat')]"
+                },
+                "test_data": "{\r\n    \"metrics\": [\r\n        {\r\n            \"name\": \"myTest1\",\r\n            \"timestamp\": 1589909595,\r\n            \"tags\": {\r\n                \"1\": \"tagVal1\",\r\n                \"2\": \"tagVal2\",\r\n                \"name\": \"TestData\"\r\n            },\r\n            \"fields\": {\r\n                \"TestData\": 1\r\n            }\r\n        },\r\n        {\r\n            \"name\": \"myTest2\",\r\n            \"timestamp\": 1589909595,\r\n            \"tags\": {\r\n                \"t1\": \"tagVal1\",\r\n                \"t2\": \"tagVal2\",\r\n                \"name\": \"TestData\"\r\n            },\r\n            \"fields\": {\r\n                \"TestData\": 2\r\n            }\r\n        }\r\n    ]\r\n}"	
+            }	
+        }
+    ]
+}

@@ -1,0 +1,1058 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "name": {
+            "type": "string",
+            "allowedValues": [],
+            "metadata": {
+                "description": "Choose a short base name for resources in this deployment, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "defaultValue": "test",
+            "allowedValues": [],
+            "metadata": {
+                "description": "Environment type (test, dev, qa), for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "westeurope",
+            "allowedValues": [
+                "australiasoutheast",
+                "canadacentral",
+                "centralindia",
+                "eastus",
+                "japaneast",
+                "southeastasia",
+                "uksouth",
+                "westeurope",
+                "westus"
+            ],
+            "metadata": {
+                "description": "Primary location of deployment, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "edge location": {
+            "type": "string",
+            "defaultValue": "westus",
+            "allowedValues": [
+                "australiasoutheast",
+                "canadacentral",
+                "centralindia",
+                "eastus",
+                "japaneast",
+                "southeastasia",
+                "uksouth",
+                "westeurope",
+                "westus"
+            ],
+            "metadata": {
+                "description": "Location for deployment of edge resources, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "VM admin username": {
+            "type": "string",
+            "allowedValues": [],
+            "metadata": {
+                "description": "Username used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "VM admin password": {
+            "type": "securestring",
+            "allowedValues": [],
+            "metadata": {
+                "description": "Password used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "base VM size": {
+            "type": "string",
+            "defaultValue": "Standard_B1ms",
+            "allowedValues": [],
+            "metadata": {
+                "description": "Size for VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+            }
+        },
+        "InfluxDB option": {
+            "type": "string",
+            "defaultValue": "Open Source",
+            "allowedValues": [
+                "Open Source",
+                "Enterprise"
+            ],
+            "metadata": {
+                "description": "Edition of Influx DB to deploy. NB: Enterprise edition deploys more components and will incur greater cost."
+            }
+        }
+    },
+    "variables": {
+        "baseUrl": "[deployment().properties.templateLink.uri]",
+        "enterpriseTemplateUrl": "https://raw.githubusercontent.com/influxdata/azure-resource-manager-influxdb-enterprise/master/src/mainTemplate.json",
+        "baseName": "[concat(parameters('name'), '-', parameters('environment'))]",
+        "rando": "[uniqueString(resourceGroup().id, variables('baseName'))]",
+        "baseNameSafe": "[concat(substring(toLower(replace(variables('baseName'),'-', '')), 0, 8),variables('rando'))]",
+        "influxType": "[toLower(replace(parameters('InfluxDB option'),' ', ''))]",
+        "vnetCloudSettings": {
+            "nsg": {
+                "name": "[concat(variables('baseName'), '-cloud-nsg')]",
+                "location": "[parameters('location')]",
+                "baseRules": [
+                    {
+                        "name": "SSHUDP",
+                        "properties": {
+                            "protocol": "Udp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 102,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "InfludDB2",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "9999",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 107,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "Grafana",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3000",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 106,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "InfludDB",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8086",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 104,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "IoTHubOut",
+                        "properties": {
+                            "protocol": "Udp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 103,
+                            "direction": "Outbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "RDP",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3389",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 110,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "Chronograf",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8888",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 105,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "SSHTCP",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 101,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "WinRM",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "5986",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 1010,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ]
+            },
+            "nsg_rules": [],
+            "vnet": {
+                "name": "[concat(variables('baseName'), '-cloud-vnet')]",
+                "location": "[parameters('location')]",
+                "addressPrefixes": [
+                    "10.0.0.0/16"
+                ],
+                "dhcpOptions": [],
+                "subnets": [
+                    {
+                        "name": "default",
+                        "properties": {
+                            "addressPrefix": "10.0.2.0/24",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('baseName'), '-cloud-nsg'))]"
+                            },
+                            "serviceEndpoints": [],
+                            "delegations": [],
+                            "privateEndpointNetworkPolicies": "Enabled",
+                            "privateLinkServiceNetworkPolicies": "Enabled"
+                        }
+                    }
+                ],
+                "virtualNetworkPeerings": [],
+                "enableDdosProtection": false,
+                "enableVmProtection": false
+            }
+        },
+        "vnetEdgeSettings": {
+            "nsg": {
+                "name": "[concat(variables('baseName'), '-edge-nsg')]",
+                "location": "[parameters('edge location')]",
+                "baseRules": [
+                    {
+                        "name": "SSHUDP",
+                        "properties": {
+                            "protocol": "Udp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 102,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "InfludDB2",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "9999",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 107,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "Grafana",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3000",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 106,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "InfludDB",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8086",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 104,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "IoTHubOut",
+                        "properties": {
+                            "protocol": "Udp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 103,
+                            "direction": "Outbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "RDP",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "3389",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 110,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "Chronograf",
+                        "properties": {
+                            "protocol": "TCP",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8888",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 105,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "SSHTCP",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 101,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "WinRM",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "5986",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 1010,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ]
+            },
+            "nsg_rules": [],
+            "vnet": {
+                "name": "[concat(variables('baseName'), '-edge-vnet')]",
+                "location": "[parameters('edge location')]",
+                "addressPrefixes": [
+                    "10.0.0.0/16"
+                ],
+                "dhcpOptions": [],
+                "subnets": [
+                    {
+                        "name": "default",
+                        "properties": {
+                            "addressPrefix": "10.0.2.0/24",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('baseName'), '-edge-nsg'))]"
+                            },
+                            "serviceEndpoints": [],
+                            "delegations": [],
+                            "privateEndpointNetworkPolicies": "Enabled",
+                            "privateLinkServiceNetworkPolicies": "Enabled"
+                        }
+                    },
+                    {
+                        "name": "containerGroups",
+                        "properties": {
+                            "addressPrefix": "10.0.3.0/24",
+                            "networkSecurityGroup": {
+                                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', concat(variables('baseName'), '-edge-nsg'))]"
+                            },
+                            "serviceEndpoints": [],
+                            "delegations": [
+                                {
+                                    "name": "DelegationService",
+                                    "properties": {
+                                        "serviceName": "Microsoft.ContainerInstance/containerGroups"
+                                    }
+                                }
+                            ],
+                            "privateEndpointNetworkPolicies": "Enabled",
+                            "privateLinkServiceNetworkPolicies": "Enabled"
+                        }
+                    }
+                ],
+                "virtualNetworkPeerings": [],
+                "enableDdosProtection": false,
+                "enableVmProtection": false
+            }
+        },
+        "vmInfluxDbEdgeSettings": {
+            "name": "[concat(variables('baseName'), '-vm-influxdb-edge')]",
+            "location": "[parameters('edge location')]",
+            "nic": {
+                "name": "[concat(variables('baseName'), '-nic-influxdb-edge')]",
+                "location": "[parameters('edge location')]",
+                "ipConfiguration": {
+                    "name": "[concat(variables('baseName'), '-ipconfig-influxdb-edge')]",
+                    "privateIpAllocationMethod": "dynamic",
+                    "vnet": "[variables('vnetEdgeSettings').vnet.name]",
+                    "subnet": "default"
+                },
+                "pip": {
+                    "name": "[concat(variables('baseName'), '-pip-influxdb-edge')]",
+                    "location": "[parameters('edge location')]",
+                    "allocationMethod": "Static",
+                    "version": "IPv4"
+                }
+            },
+            "size": "[parameters('base VM size')]",
+            "imageReference": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS",
+                "version": "latest"
+            },
+            "osDiskName": "osdisk-influxdb-edge",
+            "admin": "[parameters('VM admin username')]",
+            "password": "[parameters('VM admin password')]",
+            "computerName": "influxdb-edge",
+            "isMarketplace": false,
+            "extension": {
+                "name": "[concat(variables('baseName'), '-vm-influxdb-edge-ext')]",
+                "location": "[parameters('edge location')]",
+                "files": [
+                    "[uri(variables('baseUrl'),'scripts/influxdb_install.bash')]"
+                ],
+                "vmName": "[concat(variables('baseName'), '-vm-influxdb-edge')]"
+            }
+        },
+        "vmIotEdgeSettings": {
+            "name": "[concat(variables('baseName'), '-vm-iotedge-edge')]",
+            "location": "[parameters('edge location')]",
+            "nic": {
+                "name": "[concat(variables('baseName'), '-nic-iotedge-edge')]",
+                "location": "[parameters('edge location')]",
+                "ipConfiguration": {
+                    "name": "[concat(variables('baseName'), '-ipconfig-iotedge-edge')]",
+                    "privateIpAllocationMethod": "dynamic",
+                    "vnet": "[variables('vnetEdgeSettings').vnet.name]",
+                    "subnet": "default"
+                },
+                "pip": {
+                    "name": "[concat(variables('baseName'), '-pip-iotedge-edge')]",
+                    "location": "[parameters('edge location')]",
+                    "allocationMethod": "Static",
+                    "version": "IPv4"
+                }
+            },
+            "size": "[parameters('base VM size')]",
+            "imageReference": {
+                "publisher": "microsoft_iot_edge",
+                "offer": "iot_edge_vm_ubuntu",
+                "sku": "ubuntu_1604_edgeruntimeonly",
+                "version": "1.0.1"
+            },
+            "osDiskName": "osdisk-iotedge-edge",
+            "admin": "[parameters('VM admin username')]",
+            "password": "[parameters('VM admin password')]",
+            "computerName": "iotedge",
+            "plan": {
+                "name": "ubuntu_1604_edgeruntimeonly",
+                "publisher": "microsoft_iot_edge",
+                "product": "iot_edge_vm_ubuntu"
+            },
+            "extension": {
+                "name": "[concat(variables('baseName'), '-vm-iotedge-edge-ext')]",
+                "location": "[parameters('edge location')]",
+                "files": [
+                    "[uri(variables('baseUrl'),'scripts/deployment.json')]",
+                    "[uri(variables('baseUrl'),'scripts/initialize_iotedge.sh')]"
+                ],
+                "vmName": "[concat(variables('baseName'), '-vm-iotedge-edge')]",
+                "dependsOn": "[if(equals(variables('influxType'), 'enterprise'), 'vm_influxdb_enterprise_cloud', 'vm_influxdb_cloud')]"
+            }
+        },
+        "vmInfluxDbCloudSettings": {
+            "name": "[concat(variables('baseName'), '-vm-influxdb-cloud')]",
+            "location": "[parameters('location')]",
+            "nic": {
+                "name": "[concat(variables('baseName'), '-nic-influxdb-cloud')]",
+                "location": "[parameters('location')]",
+                "ipConfiguration": {
+                    "name": "[concat(variables('baseName'), '-ipconfig-influxdb-cloud')]",
+                    "privateIpAllocationMethod": "dynamic",
+                    "vnet": "[variables('vnetCloudSettings').vnet.name]",
+                    "subnet": "default"
+                },
+                "pip": {
+                    "name": "[concat(variables('baseName'), '-pip-influxdb-cloud')]",
+                    "location": "[parameters('location')]",
+                    "allocationMethod": "Static",
+                    "version": "IPv4"
+                }
+            },
+            "size": "[parameters('base VM size')]",
+            "imageReference": {
+                "publisher": "Canonical",
+                "offer": "UbuntuServer",
+                "sku": "16.04-LTS",
+                "version": "latest"
+            },
+            "osDiskName": "osdisk-influxdb-cloud",
+            "admin": "[parameters('VM admin username')]",
+            "password": "[parameters('VM admin password')]",
+            "computerName": "influxdb-cloud",
+            "isMarketplace": false,
+            "extension": {
+                "name": "[concat(variables('baseName'), '-vm-influxdb-cloud-ext')]",
+                "location": "[parameters('location')]",
+                "files": [
+                    "[uri(variables('baseUrl'),'scripts/influxdb_install.bash')]"
+                ],
+                "vmName": "[concat(variables('baseName'), '-vm-influxdb-cloud')]"
+            }
+        },
+        "iotHubSettings": {
+            "name": "[concat(variables('baseName'), '-iothub')]",
+            "location": "[parameters('location')]"
+
+        },
+        "cg1Settings": {
+            "name": "[concat(variables('baseName'), '-cg1')]",
+            "location": "[parameters('edge location')]",
+            "vnet": "[variables('vnetEdgeSettings').vnet.name]",
+            "subnet": "containerGroups",
+            "networkProfileName": "[concat(variables('baseName'), '-cg1-nwp')]",
+            "containerName": "edgeplcsim1",
+            "image": "mcr.microsoft.com/iotedge/opc-plc:1.0.0-linux-amd64",
+            "command": ["dotnet", "/app/opcplc.dll", "--autoaccept", "--unsecuretransport"],
+            "port": "50000",
+            "requiredCPU": "1",
+            "requiredRAM": "1"
+        },
+        "cg2Settings": {
+            "name": "[concat(variables('baseName'), '-cg2')]",
+            "location": "[parameters('edge location')]",
+            "vnet": "[variables('vnetEdgeSettings').vnet.name]",
+            "subnet": "containerGroups",
+            "networkProfileName": "[concat(variables('baseName'), '-cg2-nwp')]",
+            "containerName": "edgeplcsim2",
+            "image": "mcr.microsoft.com/iotedge/opc-plc:1.0.0-linux-amd64",
+            "command": ["dotnet", "/app/opcplc.dll", "--autoaccept","--unsecuretransport"],
+            "port": "50000",
+            "requiredCPU": "1.0",
+            "requiredRAM": "1.0"
+        },
+        "storageAccountSettings": {
+            "name": "[substring(concat(variables('baseNameSafe'), 'store'), 0, 23)]",
+            "location": "[parameters('edge location')]"
+        },
+        "functionAppSettings": {
+            "name": "[concat(variables('baseNameSafe'), '-azfunc')]",
+            "location": "[parameters('edge location')]",
+            "siteName": "[concat(variables('baseNameSafe'), 'site')]",
+            "influxType": "[variables('influxType')]",
+            "storageAccountName": "[variables('storageAccountSettings').name]"
+        }
+    },
+    "resources": [
+        {
+            "name": "nsg_cloud",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'nsg/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "NsgSettings": {
+                        "value": "[variables('vnetCloudSettings').nsg]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "nsg_edge",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'nsg/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "NsgSettings": {
+                        "value": "[variables('vnetEdgeSettings').nsg]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vnet_cloud",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "nsg_cloud"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vnet/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "VnetSettings": {
+                        "value": "[variables('vnetCloudSettings').vnet]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vnet_edge",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "nsg_edge"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vnet/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "VnetSettings": {
+                        "value": "[variables('vnetEdgeSettings').vnet]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vm_influxdb_cloud",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_cloud"
+            ],
+            "condition": "[equals(variables('influxType'), 'opensource')]",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "VmSettings": {
+                        "value": "[variables('vmInfluxDbCloudSettings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vm_influxdb_enterprise_cloud",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_cloud"
+            ],
+            "condition": "[equals(variables('influxType'), 'enterprise')]",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('enterpriseTemplateUrl')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "chronograf": {
+                        "value": "Yes"
+                    },
+                    "adminUsername": {
+                        "value": "[parameters('VM admin username')]"
+                    },
+                    "password": {
+                        "value": {
+                            "authenticationType": "password",
+                            "password": "[parameters('VM admin password')]"
+                        }
+                    },
+                    "influxdbUsername": {
+                        "value": "[parameters('VM admin username')]"
+                    },
+                    "influxdbPassword": {
+                        "value": "[parameters('VM admin password')]"
+                    },
+                    "location": {
+                        "value": "[parameters('location')]"
+                    },
+                    "virtualNetworkName": {
+                        "value": "[variables('vnetCloudSettings').vnet.name]"
+                    },
+                    "loadBalancerType": {
+                        "value": "external"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vm_influxdb_edge",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_edge"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "VmSettings": {
+                        "value": "[variables('vmInfluxDbEdgeSettings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "iothub",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'iothub/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "IoTHubSettings": {
+                        "value": "[variables('iotHubSettings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vm_iotedge",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_edge",
+                "iothub"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm_marketplace/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "VmSettings": {
+                        "value": "[variables('vmIotEdgeSettings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "vm_iotedge_ext",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vm_iotedge",
+                "iothub",
+                "storage",
+                "vm_influxdb_edge",
+                "edge_plc_sim1",
+                "edge_plc_sim2",
+                "[variables('vmIotEdgeSettings').extension.dependsOn]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm_runcommand/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "ExtSettings": {
+                        "value": "[variables('vmIotEdgeSettings').extension]"
+                    },
+                    "CommandToRun": {
+                        "value": "[concat('./initialize_iotedge.sh ', '\"', reference('iothub').outputs.iotHubConnectionString.value, '\" \"', reference('iothub').outputs.iotHubHostName.value, '\" \"', variables('vmIotEdgeSettings').computerName, '\" \"', reference('storage').outputs.storageAccountEndpoint.value, '\" \"', reference('vm_influxdb_edge').outputs.PublicIpAddress.value, '\" \"', reference('edge_plc_sim1').outputs.containerIp.value, '\" \"', reference('edge_plc_sim2').outputs.containerIp.value, '\" \"', if(equals(variables('influxType'), 'enterprise'), '0.0.0.0', reference('vm_influxdb_cloud').outputs.PublicIpAddress.value), '\"')]"
+                    } 
+                }
+            }
+        },
+        {
+            "name": "vm_influxdb_edge_ext",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vm_influxdb_edge"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm_runcommand/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "ExtSettings": {
+                        "value": "[variables('vmInfluxDbEdgeSettings').extension]"
+                    },
+                    "CommandToRun": {
+                        "value": "./influxdb_install.bash"
+                    } 
+                }
+            }
+        },
+        {
+            "name": "vm_influxdb_cloud_ext",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vm_influxdb_cloud"
+            ],
+            "condition": "[equals(variables('influxType'), 'opensource')]",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'vm_runcommand/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "ExtSettings": {
+                        "value": "[variables('vmInfluxDbCloudSettings').extension]"
+                    },
+                    "CommandToRun": {
+                        "value": "./influxdb_install.bash"
+                    } 
+                }
+            }
+        },
+        {
+            "name": "edge_plc_sim1",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_edge"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'containergroup/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "CGSettings": {
+                        "value": "[variables('cg1Settings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "edge_plc_sim2",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "vnet_edge"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'containergroup/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "CGSettings": {
+                        "value": "[variables('cg2Settings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "storage",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'storageaccount/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "StorageSettings": {
+                        "value": "[variables('storageAccountSettings')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "function_app",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-01-01",
+            "dependsOn": [
+                "storage",
+                "iothub",
+                "vm_iotedge_ext"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[uri(variables('baseUrl'),'functionapp/deploy.json')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "FunctionAppSettings": {
+                        "value": "[variables('functionAppSettings')]"
+                    },
+                    "StorageKey": {
+                        "value": "[reference('storage').outputs.storageAccountKey.value]"
+                    },
+                    "InfluxHost": {
+                        "value": "[if(equals(variables('influxType'), 'enterprise'), '0.0.0.0', reference('vm_influxdb_cloud').outputs.PublicIpAddress.value)]"
+                    },
+                    "IoTHubSBEndpoint": {
+                        "value": "[reference('iothub').outputs.iotHubSBEndpoint.value]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "Influx (Cloud) IP Address": {
+            "condition": "[equals(variables('influxType'), 'opensource')]",
+            "type": "string",
+            "value": "[reference('vm_influxdb_cloud').outputs.PublicIpAddress.value]"
+        },
+        "Influx (Edge) IP Address": {
+            "type": "string",
+            "value": "[reference('vm_influxdb_edge').outputs.PublicIpAddress.value]"
+        },
+        "IoT Edge IP Address": {
+            "type": "string",
+            "value": "[reference('vm_iotedge').outputs.PublicIpAddress.value]"
+        },
+        "StorageKey": {
+            "type": "string",
+            "value": "[reference('storage').outputs.storageAccountKey.value]"
+        },
+        "StorageEndpoint": {
+            "type": "string",
+            "value": "[reference('storage').outputs.storageAccountEndpoint.value]"
+        },
+        "Sim1Ip": {
+            "type": "string",
+            "value": "[reference('edge_plc_sim1').outputs.containerIp.value]"
+        },
+        "Sim2Ip": {
+            "type": "string",
+            "value": "[reference('edge_plc_sim2').outputs.containerIp.value]"
+        }
+    }
+}

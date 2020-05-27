@@ -1,0 +1,39 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "VnetSettings": {
+            "type": "Object"
+        }
+    },
+    "variables": {
+        "name": "[parameters('VnetSettings').name]",
+        "location": "[parameters('VnetSettings').location]",
+        "addressPrefixes": "[parameters('VnetSettings').addressPrefixes]",
+        "dhcpOptions": "[parameters('VnetSettings').dhcpOptions]",
+        "subnets": "[parameters('VnetSettings').subnets]",
+        "virtualNetworkPeerings": "[parameters('VnetSettings').virtualNetworkPeerings]",
+        "enableDdosProtection": "[parameters('VnetSettings').enableDdosProtection]",
+        "enableVmProtection": "[parameters('VnetSettings').enableVmProtection]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2019-11-01",
+            "name": "[variables('name')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": "[variables('addressPrefixes')]"
+                },
+                "dhcpOptions": {
+                    "dnsServers": "[variables('dhcpOptions')]"
+                },
+                "subnets": "[variables('subnets')]",
+                "virtualNetworkPeerings": "[variables('virtualNetworkPeerings')]",
+                "enableDdosProtection": "[variables('enableDdosProtection')]",
+                "enableVmProtection": "[variables('enableVmProtection')]"
+            }
+        }
+    ]
+}
