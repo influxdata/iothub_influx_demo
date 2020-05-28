@@ -1,12 +1,12 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
         "name": {
             "type": "string",
             "allowedValues": [],
             "metadata": {
-                "description": "Choose a short base name for resources in this deployment, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Choose a short base name for resources in this deployment, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "environment": {
@@ -14,7 +14,7 @@
             "defaultValue": "test",
             "allowedValues": [],
             "metadata": {
-                "description": "Environment type (test, dev, qa), for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Environment type (test, dev, qa), for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "location": {
@@ -32,7 +32,7 @@
                 "westus"
             ],
             "metadata": {
-                "description": "Primary location of deployment, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Primary location of deployment, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "edge location": {
@@ -50,21 +50,21 @@
                 "westus"
             ],
             "metadata": {
-                "description": "Location for deployment of edge resources, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Location for deployment of edge resources, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "VM admin username": {
             "type": "string",
             "allowedValues": [],
             "metadata": {
-                "description": "Username used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Username used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "VM admin password": {
             "type": "securestring",
             "allowedValues": [],
             "metadata": {
-                "description": "Password used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Password used for admin account on VMs, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "base VM size": {
@@ -72,7 +72,7 @@
             "defaultValue": "Standard_B1ms",
             "allowedValues": [],
             "metadata": {
-                "description": "Size for VMs, for more information about the solution deployment type navigate to https://github.com/haylesnortal/iothub_influx_demo/blob/master/README.md"
+                "description": "Size for VMs, for more information about the solution deployment type navigate to https://github.com/influxdata/iothub_influx_demo/blob/master/README.md"
             }
         },
         "InfluxDB option": {
