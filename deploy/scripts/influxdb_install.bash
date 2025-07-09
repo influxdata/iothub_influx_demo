@@ -3,7 +3,7 @@
 # Installing InfluxDB
 
 wget -q https://repos.influxdata.com/influxdata-archive.key
-gpg --no-default-keyring --homedir /nonexistent --show-keys ./influxdata-archive.key | grep -q "24C975CBA61A024EE1B631787C3D57159FC2F927" && cat influxdata-archive.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/influxdata-archive.gpg > /dev/null
+gpg --show-keys --with-fingerprint --with-colons ./influxdata-archive.key 2>&1 | grep -q '^fpr:\+24C975CBA61A024EE1B631787C3D57159FC2F927:$' && cat influxdata-archive.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/influxdata-archive.gpg > /dev/null
 echo 'deb [signed-by=/etc/apt/trusted.gpg.d/influxdata-archive.gpg] https://repos.influxdata.com/debian stable main' | sudo tee /etc/apt/sources.list.d/influxdata.list
 sudo apt-get update && sudo apt-get install -y influxdb
 sudo systemctl unmask influxdb.service
